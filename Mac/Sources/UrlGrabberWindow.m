@@ -100,7 +100,7 @@ static int do_add_url (const void *key, void *cbd)
     NSSavePanel *panel = [NSSavePanel savePanel];
     [panel beginSheetModalForWindow:[sender window] completionHandler:^(NSInteger result) {
         if (result == NSOKButton) {
-            url_save((char *)panel.URL.path, "w", true);
+            url_save_tree((char *)panel.URL.path, "w", true);
         }
     }];
 }

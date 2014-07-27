@@ -49,45 +49,6 @@ static NSString *charsets[] =
 
 #pragma mark -
 
-@interface OneChannel : NSObject
-{
-@public
-    NSString *_name;
-    NSString *_key;
-}
-@property(nonatomic,retain) NSString *name, *key;
-
-- (id)initWithChannelName:(NSString *)name;
-+ (OneChannel *)channelWithName:(NSString *)name;
-
-@end
-
-@implementation OneChannel
-@synthesize name=_name, key=_key;
-
-- (void) dealloc
-{
-    self.name = nil;
-    self.key = nil;
-    [super dealloc];
-}
-
-- (id)initWithChannelName:(NSString *)name {
-    self = [super init];
-    if (self != nil) {
-        self.name = name;
-    }
-    return self;
-}
-
-+ (OneChannel *) channelWithName:(NSString *)name {
-    return [[[self alloc] initWithChannelName:name] autorelease];
-}
-
-@end
-
-#pragma mark -
-
 @interface ServerItem : NSObject
 {
 @public
@@ -189,8 +150,6 @@ static NSString *charsets[] =
 @public
     NSString *name;
     NSMutableArray *servers;
-    NSMutableArray *channels;
-    NSMutableArray *connectCommands;
     struct ircnet *ircNet;
 }
 
@@ -199,15 +158,6 @@ static NSString *charsets[] =
 
 + (NetworkItem *)networkWithIrcnet:(ircnet *)ircNet;
 - (void)addServerWithIrcServer:(struct ircserver *)ircServer;
-- (void)resetCommands;
-- (void)resetAutojoin;
-
-@end
-
-@interface NetworkItem (private)
-
-- (void)parseAutojoin;
-- (void)parseCommands;
 
 @end
 
@@ -221,16 +171,10 @@ static NSString *charsets[] =
     
     network->name = [[NSString alloc] initWithUTF8String:anIrcNet->name];
     network->servers = [[NSMutableArray alloc] init];
-    network->channels = [[NSMutableArray alloc] init];
-    network->connectCommands = [[NSMutableArray alloc] init];
     
-    for (GSList *list = network->ircNet->servlist; list; list = list->next)
-    {
+    for (GSList *list = network->ircNet->servlist; list; list = list->next) {
         [network addServerWithIrcServer:(ircserver *)list->data];
     }
-    
-    [network parseAutojoin];
-    [network parseCommands];
     
     return [network autorelease];
 }
@@ -239,72 +183,12 @@ static NSString *charsets[] =
 {
     [name release];
     [servers release];
-    [channels release];
-    [connectCommands release];
     [super dealloc];
 }
 
 - (void) addServerWithIrcServer:(ircserver *)ircServer
 {
     [servers addObject:[ServerItem serverWithIrcServer:ircServer]];
-}
-
-- (void) resetCommands
-{
-    free(ircNet->command);
-    ircNet->command = strdup([[connectCommands componentsJoinedByString:@"\n"] UTF8String]);
-}
-
-- (void) resetAutojoin
-{
-    free(ircNet->autojoin);
-    
-    // TODO: should be replaced to autojoin_merge and autojoin_split
-    
-    NSMutableString *ircNetChannels = [NSMutableString string];
-    NSMutableString *ircNetKeys = [NSMutableString string];
-    
-    // Collect the channels and keys.  Since some channels might not have
-    // keys, we need to collec any channels with keys first!  The simplest
-    // way to do this is to do it in 2 passes.
-    
-    // First, the channels with keys
-    for ( OneChannel *channel in channels )
-    {
-        NSString *key = channel->_key;
-        if (key && [key length])
-        {
-            if ([ircNetChannels length])
-            {
-                [ircNetChannels appendString:@","];
-                [ircNetKeys appendString:@","];
-            }
-            
-            [ircNetChannels appendString:channel->_name];
-            [ircNetKeys appendString:key];
-        }
-    }
-    
-    // and then the channels without keys
-    for ( OneChannel *channel in channels )
-    {
-        NSString *key = channel->_key;
-        if ( !key || [key length] == 0)
-        {
-            if ([ircNetChannels length])
-                [ircNetChannels appendString:@","];
-            
-            [ircNetChannels appendString:channel->_name];
-        }
-    }
-    
-    if ([ircNetKeys length] > 0)
-    {
-        [ircNetChannels appendString:@" "];
-        [ircNetChannels appendString:ircNetKeys];
-    }
-    
-    ircNet->autojoin = strdup([ircNetChannels UTF8String]);
 }
 
 #pragma mark Property Interfaces
@@ -341,50 +225,6 @@ static NSString *charsets[] =
     name = [aName retain];
     free(ircNet->name);
     ircNet->name = strdup([aName UTF8String]);
-}
-
-@end
-
-@implementation NetworkItem (private)
-
-- (void) parseAutojoin {
-    const char *autojoin = ircNet->autojoin;
-    if (autojoin == NULL || autojoin[0] == 0)
-        return;
-    
-    // TODO: should be replaced to autojoin_merge and autojoin_split
-    
-    // autojoin is in the form of the irc join string
-    //
-    //        <channel>{,<channel>} [<key>{,<key>}]
-    NSString *autojoins = @(autojoin);
-    NSArray *autojoinParts = [autojoins componentsSeparatedByString:@" "];
-    
-    NSString *channelsString = autojoinParts[0];
-    NSString *keysString = [autojoinParts count]>1 ? autojoinParts[1] : @"";
-    keysString = [keysString stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-    
-    for ( NSString *channelName in [channelsString componentsSeparatedByString:@","] ) {
-        [channels addObject:[OneChannel channelWithName:channelName]];
-    }
-    
-    // Then assign any keys..
-    NSArray *keys = [keysString componentsSeparatedByString:@","];
-    
-    for ( NSUInteger i = 0; i < [keys count]; i++ ) {
-        [channels[i] setKey:keys[i]];
-    }
-}
-
-- (void) parseCommands
-{
-    const char *commandsCString = ircNet->command;
-    if ( commandsCString == NULL || commandsCString[0] == 0)
-        return;
-    
-    for ( NSString *command in [@(commandsCString) componentsSeparatedByString:@"\n"] ) {
-        [connectCommands addObject:command];
-    }
 }
 
 @end
@@ -440,7 +280,7 @@ static NSString *charsets[] =
     [networkNickname2TextField setTag:STRUCT_OFFSET_STR(struct ircnet, nick2)];
     [networkRealnameTextField setTag:STRUCT_OFFSET_STR(struct ircnet, real)];
     [networkUsernameTextField setTag:STRUCT_OFFSET_STR(struct ircnet, user)];
-    [networkNickservPasswordTextField setTag:STRUCT_OFFSET_STR(struct ircnet, nickserv)];
+    //[networkNickservPasswordTextField setTag:STRUCT_OFFSET_STR(struct ircnet, nickserv)]; // HEXDO:
     [networkPasswordTextField setTag:STRUCT_OFFSET_STR(struct ircnet, pass)];
     [charsetComboBox setTag:STRUCT_OFFSET_STR(struct ircnet, encoding)];
     
@@ -449,7 +289,7 @@ static NSString *charsets[] =
     // save the value of prefs.slist_select now, and reset the selection after
     // the first reloadData.
     
-    NSInteger slist_select = prefs.slist_select;
+    NSInteger slist_select = prefs.hex_gui_slist_select;
     
     // make charsets menu
     for (NSString **c = charsets; *c; c++)
@@ -503,7 +343,7 @@ static NSString *charsets[] =
 
 - (void) toggleShowWhenStartup:(id)sender
 {
-    prefs.slist_skip = [sender intValue];
+    prefs.hex_gui_slist_skip = [sender intValue];
 }
 
 - (void) toggleCustomUserInformation:(id)sender
@@ -575,37 +415,6 @@ static NSString *charsets[] =
     *f = *v ? strdup (v) : NULL;
 }
 
-// not used
-- (void) doDoneEdit:(id)sender
-{
-    // Grab values from the GUI and replace in struct ircnet.
-    // NOTE: struct ircserver is still edited in real time.
-    NSInteger row = [networkTableView selectedRow];
-    if (row >= 0)
-    {
-        NetworkItem *network = filteredNetworks[row];
-        
-        //set_text_value (net_join, &net->net->autojoin);
-        
-        if (network->ircNet->autojoin)
-        {
-            char *s = network->ircNet->autojoin;
-            char *d = s;
-            while (*s)
-            {
-                if (*s == '\n')
-                    *s = ',';
-                if (*s != ' ')
-                    *d++ = *s;
-                s++;
-            }
-            *d = 0;
-        }
-        
-        
-    }
-}
-
 - (void) addChannel:(id)sender
 {
     NSInteger networkIndex = [networkTableView selectedRow];
@@ -613,12 +422,10 @@ static NSString *charsets[] =
         return;
     
     NetworkItem *network = filteredNetworks[networkIndex];
-    
-    [network->channels addObject:[OneChannel channelWithName:NSLocalizedStringFromTable(@"NEW CHANNEL", @"xchataqua", @"Default channel name: MainMenu->File->Server List... => (Select server)->On Join->channels->'+'")]];
-    
+    servlist_favchan_add(network->ircNet, NSLocalizedStringFromTable(@"NEW CHANNEL", @"xchataqua", @"Default channel name: MainMenu->File->Server List... => (Select server)->On Join->channels->'+'").UTF8String);
     [networkJoinTableView reloadData];
     
-    NSInteger lastIndex = [network->channels count] - 1;    
+    NSInteger lastIndex = g_slist_length(network->ircNet->favchanlist) - 1;
     [networkJoinTableView selectRowIndexes:[NSIndexSet indexSetWithIndex:lastIndex] byExtendingSelection:NO];
     [networkJoinTableView scrollRowToVisible:lastIndex];
     [networkJoinTableView editColumn:0 row:lastIndex withEvent:nil select:YES];
@@ -635,11 +442,10 @@ static NSString *charsets[] =
     
     NSInteger channelIndex = [networkJoinTableView selectedRow];
     if (channelIndex < 0) return;
-    
-    [network->channels removeObjectAtIndex:channelIndex];
+
+    favchannel *channel = g_slist_nth_data(network->ircNet->favchanlist, (guint)channelIndex);
+    servlist_favchan_remove(network->ircNet, channel);
     [networkJoinTableView reloadData];
-    
-    [network resetAutojoin];
 }
 
 - (void) addCommand:(id)sender
@@ -648,12 +454,12 @@ static NSString *charsets[] =
     if (networkIndex < 0) return;
     
     NetworkItem *network = filteredNetworks[networkIndex];
-    
-    [network->connectCommands addObject:NSLocalizedStringFromTable(@"NEW COMMAND", @"xchataqua", @"Default command: MainMenu->File->Server List... => (Select server)->On Join->commands->'+'")];
+
+    commandentry *entry = servlist_command_add(network->ircNet, NSLocalizedStringFromTable(@"NEW COMMAND", @"xchataqua", @"Default command: MainMenu->File->Server List... => (Select server)->On Join->commands->'+'").UTF8String);
     
     [networkCommandTableView reloadData];
     
-    NSInteger lastIndex = [network->connectCommands count] - 1;    
+    NSInteger lastIndex = g_slist_length(network->ircNet->commandlist) - 1;
     [networkCommandTableView selectRowIndexes:[NSIndexSet indexSetWithIndex:lastIndex] byExtendingSelection:NO];
     [networkCommandTableView scrollRowToVisible:lastIndex];
     [networkCommandTableView editColumn:0 row:lastIndex withEvent:nil select:YES];
@@ -670,11 +476,10 @@ static NSString *charsets[] =
     
     NSInteger commandIndex = [networkCommandTableView selectedRow];
     if (commandIndex < 0) return;
-    
-    [network->connectCommands removeObjectAtIndex:commandIndex];
+
+    GSList *list = network->ircNet->commandlist;
+    servlist_command_remove(network->ircNet, g_slist_nth_data(list, (guint)commandIndex));
     [networkCommandTableView reloadData];
-    
-    [network resetCommands];
 }
 
 - (void) addServer:(id)sender
@@ -802,46 +607,52 @@ static NSString *charsets[] =
     NSInteger selectedRow = [rowIndexes firstIndex];
     
     NetworkItem *network = filteredNetworks[[networkTableView selectedRow]];
-    
-    NSMutableArray *dataArray = nil;
-    if ( tableView == networkServerTableView ) {
-        dataArray = network->servers;
-    }
-    else if ( tableView == networkJoinTableView ) {
-        dataArray = network->channels;
-    }
-    else if ( tableView == networkCommandTableView ) {
-        dataArray = network->connectCommands;
-    } 
-    else {
-        dassert(NO);
-    }
-    
-    id selectedItem = [dataArray[selectedRow] retain];
-    switch (dropOperation) {
-        case NSTableViewDropOn:
-            dataArray[selectedRow] = dataArray[row];
-            dataArray[row] = selectedItem;
-            break;
-        case NSTableViewDropAbove:
-            [dataArray removeObjectAtIndex:selectedRow];
-            [dataArray insertObject:selectedItem atIndex:row-(row>=selectedRow)];
-            [tableView reloadData];
-            break;
-        default:
+    if (tableView == networkServerTableView) {
+        NSMutableArray *dataArray = network->servers;
+        id selectedItem = [dataArray[selectedRow] retain];
+        switch (dropOperation) {
+            case NSTableViewDropOn:
+                dataArray[selectedRow] = dataArray[row];
+                dataArray[row] = selectedItem;
+                break;
+            case NSTableViewDropAbove:
+                [dataArray removeObjectAtIndex:selectedRow];
+                [dataArray insertObject:selectedItem atIndex:row-(row>=selectedRow)];
+                [tableView reloadData];
+                break;
+            default:
+                dassert(NO);
+        }
+        [selectedItem release];
+    } else {
+        GSList *dataList = NULL;
+        if (tableView == networkJoinTableView) {
+            dataList = network->ircNet->favchanlist;
+        } else if ( tableView == networkCommandTableView ) {
+            dataList = network->ircNet->commandlist;
+        } else {
             dassert(NO);
+        }
+
+        GSList *selected = g_slist_nth(dataList, (guint)selectedRow);
+        switch (dropOperation) {
+            case NSTableViewDropOn: { // swap
+                GSList *target = g_slist_nth(dataList, (guint)row);
+                gpointer data = selected->data;
+                selected->data = target->data;
+                target->data = data;
+            }   break;
+            case NSTableViewDropAbove: { // insert
+                dataList = g_slist_delete_link(dataList, selected);
+                dataList = g_slist_insert(dataList, selected->data, (guint)(row-(row>=selectedRow)));
+                [tableView reloadData];
+            }   break;
+            default:
+                dassert(NO);
+        }
     }
-    [selectedItem release];
+
     [tableView unregisterDraggedTypes];
-    
-    if ( tableView == networkJoinTableView ) {
-        network = filteredNetworks[[networkTableView selectedRow]];
-        [network resetAutojoin];
-    }
-    else if ( tableView == networkCommandTableView ) {
-        network = filteredNetworks[[networkTableView selectedRow]];
-        [network resetCommands];
-    }
     
     return YES;
 }
@@ -857,7 +668,7 @@ static NSString *charsets[] =
     {
         // Figure out what was selected from the allNetworks
         NetworkItem *network = filteredNetworks[networkIndex];
-        prefs.slist_select = (int)[allNetworks indexOfObject:network];
+        prefs.hex_gui_slist_select = (int)[allNetworks indexOfObject:network];
         [self populateEditor];
     }
     else if ([notification object] == networkServerTableView)
@@ -884,12 +695,12 @@ static NSString *charsets[] =
     
     if (aTableView == networkJoinTableView)
     {
-        return [network->channels count];
+        return g_slist_length(network->ircNet->favchanlist);
     }
     
     if (aTableView == networkCommandTableView)
     {
-        return [network->connectCommands count];
+        return g_slist_length(network->ircNet->commandlist);
     }
     
     dassert(NO);
@@ -929,16 +740,17 @@ static NSString *charsets[] =
         }
         else if (aTableView == networkJoinTableView)
         {
-            OneChannel *channel = network->channels[rowIndex];
-            switch (column)
-            {
-                case 0: return channel->_name;
-                case 1: return channel->_key;
+            favchannel *channel = g_slist_nth_data(network->ircNet->favchanlist, (guint)rowIndex);
+            switch (column) {
+                case 0: return @(channel->name);
+                case 1: return channel->key ? @(channel->key) : nil;
             }
         }
         else if (aTableView == networkCommandTableView)
         {
-            return network->connectCommands[rowIndex];
+            GSList *list = network->ircNet->commandlist;
+            commandentry *entry = g_slist_nth_data(list, (guint)rowIndex);
+            return @(entry->command);
         }
     }
     dassert(NO);
@@ -983,18 +795,24 @@ static NSString *charsets[] =
         }
         else if (aTableView == networkJoinTableView)
         {
-            OneChannel *channel = network->channels[rowIndex];
+            favchannel *channel = g_slist_nth_data(network->ircNet->favchanlist, (guint)rowIndex);
             switch (column)
             {
-                case 0: [channel setName:anObject]; break;
-                case 1: [channel setKey:anObject]; break;
+                case 0: {
+                    g_free(channel->name);
+                    channel->name = strdup([anObject UTF8String]);
+                }   break;
+                case 1: {
+                    g_free(channel->key);
+                    channel->key = strdup([anObject UTF8String]);
+                }   break;
             }
-            [network resetAutojoin];
         }
         else if (aTableView == networkCommandTableView)
         {
-            network->connectCommands[rowIndex] = anObject;
-            [network resetCommands];
+            commandentry *entry = g_slist_nth_data(network->ircNet->commandlist, (guint)rowIndex);
+            g_free(entry->command);
+            entry->command = strdup([anObject UTF8String]);
         }
     }
 }
@@ -1019,11 +837,11 @@ static NSString *charsets[] =
 {
     [self makeFirstResponder:nick1TextField]; // any reason?
     
-    strcpy (prefs.nick1, [[nick1TextField stringValue] UTF8String]);
-    strcpy (prefs.nick2, [[nick2TextField stringValue] UTF8String]);
-    strcpy (prefs.nick3, [[nick3TextField stringValue] UTF8String]);
-    strcpy (prefs.username, [[usernameTextField stringValue] UTF8String]);
-    strcpy (prefs.realname, [[realnameTextField stringValue] UTF8String]);
+    strcpy (prefs.hex_irc_nick1, [[nick1TextField stringValue] UTF8String]);
+    strcpy (prefs.hex_irc_nick2, [[nick2TextField stringValue] UTF8String]);
+    strcpy (prefs.hex_irc_nick3, [[nick3TextField stringValue] UTF8String]);
+    strcpy (prefs.hex_irc_user_name, [[usernameTextField stringValue] UTF8String]);
+    strcpy (prefs.hex_irc_real_name, [[realnameTextField stringValue] UTF8String]);
     
     servlist_save();
 }
@@ -1112,13 +930,13 @@ static NSString *charsets[] =
 
 - (void) populate
 {
-    [nick1TextField setStringValue:@(prefs.nick1)];
-    [nick2TextField setStringValue:@(prefs.nick2)];
-    [nick3TextField setStringValue:@(prefs.nick3)];
-    [realnameTextField setStringValue:@(prefs.realname)];
-    [usernameTextField setStringValue:@(prefs.username)];
+    [nick1TextField setStringValue:@(prefs.hex_irc_nick1)];
+    [nick2TextField setStringValue:@(prefs.hex_irc_nick2)];
+    [nick3TextField setStringValue:@(prefs.hex_irc_nick3)];
+    [realnameTextField setStringValue:@(prefs.hex_irc_real_name)];
+    [usernameTextField setStringValue:@(prefs.hex_irc_user_name)];
     
-    [showWhenStartupToggleButton setIntegerValue:prefs.slist_skip];
+    [showWhenStartupToggleButton setIntegerValue:prefs.hex_gui_slist_skip];
     
     [self populateNetworks];
 }

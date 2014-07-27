@@ -148,12 +148,12 @@ AquaChat *AquaChatSharedObject;
 }
 
 - (void)applyPreferences:(id)sender {
-    [self setFont:prefs.font_normal];
+    [self setFont:prefs.hex_text_font_main];
     
     [self.mainWindow applyPreferences:sender];
     [TabOrWindowView applyPreferences:sender];
     
-    if (prefs.autodccsend == 1 && !strcasecmp ((char *)g_get_home_dir (), prefs.dccdir))
+    if (prefs.hex_dcc_auto_recv == 1 && !strcasecmp ((char *)g_get_home_dir (), prefs.hex_dcc_dir))
     {
         [SGAlert alertWithString:NSLocalizedStringFromTable(@"*WARNING*\nAuto accepting DCC to your home directory\ncan be dangerous and is exploitable. Eg:\nSomeone could send you a .bash_profile", @"xchat", @"") andWait:false];
     }
@@ -169,10 +169,11 @@ AquaChat *AquaChatSharedObject;
     // Toggle menu has no effect anymore
     if ([sender isKindOfClass:[NSMenuItem class]]) return;
     
-    if (prefs.identd)
+    if (prefs.hex_identd) {
         identd_start ();
-    else
+    } else {
         identd_stop ();
+    }
 }
 
 - (BOOL) myKeyDown:(NSEvent *) theEvent
@@ -258,7 +259,7 @@ AquaChat *AquaChatSharedObject;
             notification.informativeText = @(x);
 
             NSMutableDictionary *settings = [NSMutableDictionary dictionary];
-            settings[@"setting"] = [NSNumber numberWithInt:info->notification];
+            settings[@"setting"] = @(info->notification);
             notification.userInfo = settings;
 
             [[NSUserNotificationCenter defaultUserNotificationCenter] deliverNotification:notification];
@@ -345,7 +346,7 @@ AquaChat *AquaChatSharedObject;
 - (void) applicationWillTerminate:(NSNotification *) aNotification
 {
     // To avoid having the closed windows end up sending /part, tell xchat we're quitting
-    xchat_is_quitting = true;
+    hexchat_is_quitting = true;
     
     // ensure window delegates get windowWillClose: messages
     // shouldn't this happen automatically? it doesn't :(
@@ -358,7 +359,7 @@ AquaChat *AquaChatSharedObject;
     
     [[NSUserDefaults standardUserDefaults] synchronize];
     
-    xchat_exit ();
+    hexchat_exit ();
 }
 
 - (BOOL)userNotificationCenter:(NSUserNotificationCenter *)center shouldPresentNotification:(NSUserNotification *)notification
@@ -732,18 +733,18 @@ AquaChat *AquaChatSharedObject;
 
 - (void) openNewServer:(id)sender
 {
-    int old = prefs.tabchannels;
-    prefs.tabchannels = sender == self.serverTabMenuItem;
+    int old = prefs.hex_gui_tab_chans;
+    prefs.hex_gui_tab_chans = sender == self.serverTabMenuItem;
     new_ircwindow (NULL, NULL, SESS_SERVER, true);
-    prefs.tabchannels = old;
+    prefs.hex_gui_tab_chans = old;
 }
 
 - (void) openNewChannel:(id)sender
 {
-    int old = prefs.tabchannels;
-    prefs.tabchannels = sender == self.channelTabMenuItem;
+    int old = prefs.hex_gui_tab_chans;
+    prefs.hex_gui_tab_chans = sender == self.channelTabMenuItem;
     new_ircwindow (current_sess->server, NULL, SESS_CHANNEL, true);
-    prefs.tabchannels = old;
+    prefs.hex_gui_tab_chans = old;
 }
 
 - (void) toggleMenuItemAndReloadPreferences:(id)sender {
@@ -757,10 +758,11 @@ AquaChat *AquaChatSharedObject;
     
     if (current_sess->server->connected)
     {
-        if (prefs.invisible)
+        if (prefs.hex_irc_invisible) {
             tcp_sendf (current_sess->server, "MODE %s +i\r\n", current_sess->server->nick);
-        else
+        } else {
             tcp_sendf (current_sess->server, "MODE %s -i\r\n", current_sess->server->nick);
+        }
     }
 }
 
@@ -770,7 +772,7 @@ AquaChat *AquaChatSharedObject;
     
     if (current_sess->server->connected)
     {
-        if (prefs.servernotice)
+        if (prefs.hex_irc_servernotice)
             tcp_sendf (current_sess->server, "MODE %s +s\r\n", current_sess->server->nick);
         else
             tcp_sendf (current_sess->server, "MODE %s -s\r\n", current_sess->server->nick);
@@ -783,7 +785,7 @@ AquaChat *AquaChatSharedObject;
     
     if (current_sess->server->connected)
     {
-        if (prefs.wallops)
+        if (prefs.hex_irc_wallops)
             tcp_sendf (current_sess->server, "MODE %s +w\r\n", current_sess->server->nick);
         else
             tcp_sendf (current_sess->server, "MODE %s -w\r\n", current_sess->server->nick);
@@ -824,7 +826,7 @@ AquaChat *AquaChatSharedObject;
 - (void)toggleAwayToValue:(BOOL)isAway {
     [self.awayMenuItem setState:isAway ? NSOnState : NSOffState];
     NSColor *awayColor;
-    if (prefs.style_inputbox && prefs.tab_layout == 2) {
+    if (prefs.hex_gui_input_style && prefs.hex_gui_tab_layout == 2) {
         if (isAway) {
             awayColor = [self.palette getColor:XAColorAwayUser];
         } else {
@@ -1109,13 +1111,13 @@ AquaChat *AquaChatSharedObject;
     struct XAMenuPreferenceItem tempPreferences [] =
     {
         // IRC menu
-        { self.invisibleMenuItem, &prefs.invisible, NO },
-        { self.receiveNoticesMenuItem, &prefs.servernotice, NO },
-        { self.receiveWallopsMenuItem, &prefs.wallops, NO },
+        { self.invisibleMenuItem, &prefs.hex_irc_invisible, NO },
+        { self.receiveNoticesMenuItem, &prefs.hex_irc_servernotice, NO },
+        { self.receiveWallopsMenuItem, &prefs.hex_irc_wallops, NO },
         // View menu
-        { self.userListMenuItem,  &prefs.hideuserlist, YES },
-        { self.userlistButtonsMenuItem, &prefs.userlistbuttons, NO },
-        { self.modeButtonsMenuItem, &prefs.chanmodebuttons, NO },
+        { self.userListMenuItem,  &prefs.hex_gui_ulist_hide, YES },
+        { self.userlistButtonsMenuItem, &prefs.hex_gui_ulist_buttons, NO },
+        { self.modeButtonsMenuItem, &prefs.hex_gui_mode_buttons, NO },
     };
     
     for (NSUInteger i = 0; i < sizeof(menuPreferenceItems) / sizeof(menuPreferenceItems[0]); i ++)
@@ -1140,7 +1142,7 @@ AquaChat *AquaChatSharedObject;
         CGFloat sz = atof (space + 1);
         if (sz)
         {
-            NSString *nm = [[NSString alloc] initWithBytes:prefs.font_normal
+            NSString *nm = [[NSString alloc] initWithBytes:prefs.hex_text_font_main
                                                     length:space - fontName
                                                   encoding:NSUTF8StringEncoding];
             f = [NSFont fontWithName:nm size:sz];
@@ -1167,7 +1169,7 @@ AquaChat *AquaChatSharedObject;
     if (!self->boldFont)
         self->boldFont = [f retain];
     
-    sprintf (prefs.font_normal, "%s %.1f", [[font fontName] UTF8String], [font pointSize]);
+    sprintf (prefs.hex_text_font_main, "%s %.1f", [[font fontName] UTF8String], [font pointSize]);
 }
 
 - (NSUInteger) numberOfActiveDccFileTransfer

@@ -115,7 +115,7 @@ NSMutableDictionary *utilities;
 
 - (void) becomeTabOrWindowAndShow:(BOOL)flag
 {
-    if (prefs.windows_as_tabs)
+    if (prefs.hex_gui_tab_utils)
         [self becomeTabAndShow:flag];
     else
         [self becomeWindowAndShow:flag];

@@ -271,16 +271,16 @@ static NSCursor *XAChatTextViewSizableCursor;
 
 - (void)clearLinesIfFlooded
 {
-    if (prefs.max_lines == 0)
+    if (prefs.hex_text_max_lines == 0)
         return;
 
-    int threshhold = prefs.max_lines + prefs.max_lines * 0.1;
+    int threshhold = prefs.hex_text_max_lines + prefs.hex_text_max_lines * 0.1;
     if (numberOfLines < threshhold)
         return;
     
     NSTextStorage *stg = [self textStorage];
     
-    while (numberOfLines > prefs.max_lines)
+    while (numberOfLines > prefs.hex_text_max_lines)
     {
         NSString *s = [stg mutableString];
         NSRange firstLine = [s lineRangeForRange:NSMakeRange(0, 0)];
@@ -312,8 +312,8 @@ static NSCursor *XAChatTextViewSizableCursor;
         stamp = time(NULL);
     }
 
-    if (prefs.timestamp) {
-        prepend += strftime(buff, sizeof(buff), prefs.stamp_format, localtime(&stamp));
+    if (prefs.hex_stamp_text) {
+        prepend += strftime(buff, sizeof(buff), prefs.hex_stamp_text_format, localtime(&stamp));
     }
 
     char textBuffer[len + 1];
@@ -323,7 +323,7 @@ static NSCursor *XAChatTextViewSizableCursor;
     char *tmp = text;
     char *end = tmp + len;
 
-    if (prefs.indent_nicks)
+    if (prefs.hex_text_indent)
     {
         *prepend++ = '\t';
         
@@ -638,7 +638,7 @@ static NSCursor *XAChatTextViewSizableCursor;
         size_t len = strlen(cword);// range->length;
 
         // Let common have first crack at it.
-        int ret = url_check_word (cword, len);    /* common/url.c */
+        int ret = url_check_word (cword);    /* common/url.c */
         
         // If we get something from common, double check a few things..
         if (ret)
@@ -768,7 +768,7 @@ static NSCursor *XAChatTextViewSizableCursor;
 {
     [super drawRect:aRect];
     
-    if (!prefs.show_separator || !prefs.indent_nicks)
+    if (!prefs.hex_text_show_sep || !prefs.hex_text_indent)
     {
         return;
     }

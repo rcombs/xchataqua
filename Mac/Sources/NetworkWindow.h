@@ -76,7 +76,4 @@
 - (IBAction)removeNetwork:(id)sender;
 - (IBAction)doFilter:(id)sender;
 
-// not used
-//- (IBAction)doDoneEdit:(id)sender;
-
 @end
