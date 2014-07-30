@@ -904,17 +904,13 @@ static NSImage *emptyBulletImage;
     [self setTitle];
     [self setNonchannel:NO];
 
-// HEXDO:
-//    if (prefs.gui_tweaks & 2)
-//    {
-//        [nickTextField setHidden:YES];
-//        [myOpOrVoiceIconImageView setHidden:YES];
-//    }
-//    if (prefs.gui_tweaks & 128)
-//    {
-//        [sessMenuButton setHidden:YES];
-//    }
-//    
+    if (!prefs.hex_gui_input_nick) {
+        nickTextField.hidden = YES;
+    }
+    if (!prefs.hex_gui_input_icon) {
+        myOpOrVoiceIconImageView.hidden = YES;
+    }
+
     if (sess->type == SESS_DIALOG)
         [self setChannel];
     else
@@ -1642,8 +1638,7 @@ static NSImage *emptyBulletImage;
     return (id)self.view;
 }
 
-- (void) progressbarStart
-{
+- (void) progressbarStart {
 // HEXDO:
 //    if (!prefs.gui_tweaks & 2)
 //    {
