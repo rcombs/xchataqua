@@ -26,9 +26,9 @@
 #import "AquaChat.h"
 #import "NetworkWindow.h"
 
-static NSString *charsets[] =
+static NSString *pages[] =
 {
-    @"UTF-8",
+    @IRC_DEFAULT_CHARSET,
     @"IRC (Latin/Unicode Hybrid)",
     @"ISO-8859-15 (Western Europe)",
     @"ISO-8859-2 (Central Europe)",
@@ -44,6 +44,49 @@ static NSString *charsets[] =
     @"CP1257 (Baltic)",
     @"GB18030 (Chinese)",
     @"TIS-620 (Thai)",
+    NULL
+};
+
+static int login_types_conf[] =
+{
+    LOGIN_DEFAULT,          /* default entry - we don't use this but it makes indexing consistent with login_types[] so it's nice */
+    LOGIN_SASL,
+#ifdef USE_OPENSSL
+    LOGIN_SASLEXTERNAL,
+#endif
+    LOGIN_PASS,
+    LOGIN_MSG_NICKSERV,
+    LOGIN_NICKSERV,
+#ifdef USE_OPENSSL
+    LOGIN_CHALLENGEAUTH,
+#endif
+    LOGIN_CUSTOM
+#if 0
+    LOGIN_NS,
+    LOGIN_MSG_NS,
+    LOGIN_AUTH,
+#endif
+};
+
+static NSString *login_types[] =
+{
+    @"Default",
+    @"SASL (username + password)",
+#ifdef USE_OPENSSL
+    @"SASL EXTERNAL (cert)",
+#endif
+    @"Server Password (/PASS password)",
+    @"NickServ (/MSG NickServ + password)",
+    @"NickServ (/NICKSERV + password)",
+#ifdef USE_OPENSSL
+    @"Challenge Auth (username + password)",
+#endif
+    @"Custom... (connect commands)",
+#if 0
+    @"NickServ (/NS + password)",
+    @"NickServ (/MSG NS + password)",
+    @"AUTH (/AUTH nickname password)",
+#endif
     NULL
 };
 
@@ -236,9 +279,8 @@ static NSString *charsets[] =
 - (void)savePreferences;
 - (void)populateFlag:(id)field fromNetwork:(NetworkItem *)network;
 - (void)populateField:(id)field fromNetwork:(NetworkItem *)network;
-- (void)populateEditor;
-- (void)populateNetworks;
-- (void)populate;
+- (void)loadNetwork;
+- (void)loadPreferences;
 
 @end
 
@@ -280,7 +322,7 @@ static NSString *charsets[] =
     [networkNickname2TextField setTag:STRUCT_OFFSET_STR(struct ircnet, nick2)];
     [networkRealnameTextField setTag:STRUCT_OFFSET_STR(struct ircnet, real)];
     [networkUsernameTextField setTag:STRUCT_OFFSET_STR(struct ircnet, user)];
-    //[networkNickservPasswordTextField setTag:STRUCT_OFFSET_STR(struct ircnet, nickserv)]; // HEXDO:
+    [networkLoginMethodComboBox setTag:STRUCT_OFFSET_INT(struct ircnet, logintype)];
     [networkPasswordTextField setTag:STRUCT_OFFSET_STR(struct ircnet, pass)];
     [charsetComboBox setTag:STRUCT_OFFSET_STR(struct ircnet, encoding)];
     
@@ -292,11 +334,13 @@ static NSString *charsets[] =
     NSInteger slist_select = prefs.hex_gui_slist_select;
     
     // make charsets menu
-    for (NSString **c = charsets; *c; c++)
-    {
+    for (NSString **c = pages; *c; c++) {
         [charsetComboBox addItemWithObjectValue:*c];
     }
-    [self populate];
+    for (NSString **c = login_types; *c; c++) {
+        [networkLoginMethodComboBox addItemWithObjectValue:*c];
+    }
+    [self loadPreferences];
     
     [filteredNetworks sortUsingDescriptors:[networkTableView sortDescriptors]];
     [networkTableView reloadData];
@@ -324,7 +368,16 @@ static NSString *charsets[] =
 
 - (void) comboBoxSelectionDidChange:(NSNotification *) notification
 {
-    [charsetComboBox setObjectValue:[charsetComboBox objectValueOfSelectedItem]];
+    NSComboBox *comboBox = notification.object;
+    if (comboBox == charsetComboBox) {
+        [comboBox setObjectValue:[comboBox objectValueOfSelectedItem]];
+    }
+    else if (notification.object == networkLoginMethodComboBox) {
+        [comboBox setObjectValue:[comboBox objectValueOfSelectedItem]];
+    }
+    else {
+        NSAssert(NO, @"");
+    }
 }
 
 #pragma mark IBAction
@@ -413,6 +466,17 @@ static NSString *charsets[] =
     free (*f);
     const char *v = [[sender stringValue] UTF8String];
     *f = *v ? strdup (v) : NULL;
+}
+
+- (void)setIndexWithControl:(NSComboBox *)sender {
+    NSInteger networkIndex = [networkTableView selectedRow];
+    if (networkIndex < 0) return;
+
+    NetworkItem *network = filteredNetworks[networkIndex];
+
+    NSInteger offset = [sender tag];
+    int *f = (int *)(((char *)network->ircNet) + offset);
+    *f = (int)[sender indexOfSelectedItem];
 }
 
 - (void) addChannel:(id)sender
@@ -669,7 +733,7 @@ static NSString *charsets[] =
         // Figure out what was selected from the allNetworks
         NetworkItem *network = filteredNetworks[networkIndex];
         prefs.hex_gui_slist_select = (int)[allNetworks indexOfObject:network];
-        [self populateEditor];
+        [self loadNetwork];
     }
     else if ([notification object] == networkServerTableView)
     {
@@ -873,7 +937,7 @@ static NSString *charsets[] =
     [field setStringValue:val];
 }
 
-- (void) populateEditor
+- (void)loadNetwork
 {
     NSInteger networkIndex = [self->networkTableView selectedRow];
     if (networkIndex < 0) return;
@@ -886,8 +950,20 @@ static NSString *charsets[] =
     [self populateField:networkNickname2TextField fromNetwork:network];
     [self populateField:networkPasswordTextField fromNetwork:network];
     [self populateField:networkRealnameTextField fromNetwork:network];
+
+    int order;
+    int logintype = LOGIN_DEFAULT;
+    for (order = 0; order < (sizeof(login_types_conf)/sizeof(login_types_conf[0])); order ++) {
+        if (login_types_conf[order] == network->ircNet->logintype) {
+            logintype = login_types_conf[order];
+            break;
+        }
+    }
+    [self->networkLoginMethodComboBox selectItemAtIndex:order];
+    id value = [self->networkLoginMethodComboBox objectValueOfSelectedItem];
+    [self->networkLoginMethodComboBox setStringValue:@"wth is happening"];
+    [self populateField:networkLoginMethodComboBox fromNetwork:network];
     [self populateField:networkUsernameTextField fromNetwork:network];
-    [self populateField:networkNickservPasswordTextField fromNetwork:network];
     [self populateField:charsetComboBox fromNetwork:network];
     
     [self populateFlag:networkAutoConnectToggleButton fromNetwork:network];
@@ -912,23 +988,7 @@ static NSString *charsets[] =
     }
 }
 
-- (void) populateNetworks
-{
-    [filteredNetworks release];
-    [allNetworks release];
-    
-    allNetworks = [[NSMutableArray alloc] init];
-    filteredNetworks = [allNetworks retain];
-    
-    for (GSList *list = network_list; list; list = list->next)
-    {
-        [filteredNetworks addObject:[NetworkItem networkWithIrcnet:(struct ircnet *)list->data]];
-    }
-    
-    [networkTableView reloadData];
-}
-
-- (void) populate
+- (void)loadPreferences
 {
     [nick1TextField setStringValue:@(prefs.hex_irc_nick1)];
     [nick2TextField setStringValue:@(prefs.hex_irc_nick2)];
@@ -938,7 +998,18 @@ static NSString *charsets[] =
     
     [showWhenStartupToggleButton setIntegerValue:prefs.hex_gui_slist_skip];
     
-    [self populateNetworks];
+    [filteredNetworks release];
+    [allNetworks release];
+
+    allNetworks = [[NSMutableArray alloc] init];
+    filteredNetworks = [allNetworks retain];
+
+    for (GSList *list = network_list; list; list = list->next)
+    {
+        [filteredNetworks addObject:[NetworkItem networkWithIrcnet:(struct ircnet *)list->data]];
+    }
+
+    [networkTableView reloadData];
 }
 
 @end
